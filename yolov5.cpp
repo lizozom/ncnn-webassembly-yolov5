@@ -194,8 +194,8 @@ int YOLOv5::load()
 
     yolov5.opt.num_threads = ncnn::get_big_cpu_count();
 
-    yolov5.load_param("yolov5n.ncnn.param");
-    yolov5.load_model("yolov5n.ncnn.bin");
+    yolov5.load_param("duckpuck-ncnn.param");
+    yolov5.load_model("duckpuck-ncnn.bin");
 
     return 0;
 }

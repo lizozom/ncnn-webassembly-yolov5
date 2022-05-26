@@ -165,11 +165,11 @@ Concat                   Concat_200               2 1 onnx::Concat_318 onnx::Con
 Convolution              Conv_201                 1 1 input.284 input.288 0=512 1=1 5=1 6=262144
 Swish                    Mul_203                  1 1 input.288 onnx::Conv_325
 Convolution              Conv_204                 1 1 onnx::Conv_285_splitncnn_0 onnx::Reshape_326 0=21 1=1 5=1 6=2688
-Reshape                  Reshape_216              1 1 onnx::Reshape_326 onnx::Transpose_338 0=6400 1=7 2=3
+Reshape                  Reshape_216              1 1 onnx::Reshape_326 onnx::Transpose_338 0=2704 1=7 2=3
 Permute                  Transpose_217            1 1 onnx::Transpose_338 output 0=1
 Convolution              Conv_218                 1 1 onnx::Conv_305_splitncnn_0 onnx::Reshape_340 0=21 1=1 5=1 6=5376
-Reshape                  Reshape_230              1 1 onnx::Reshape_340 onnx::Transpose_352 0=1600 1=7 2=3
+Reshape                  Reshape_230              1 1 onnx::Reshape_340 onnx::Transpose_352 0=676 1=7 2=3
 Permute                  Transpose_231            1 1 onnx::Transpose_352 353 0=1
 Convolution              Conv_232                 1 1 onnx::Conv_325 onnx::Reshape_354 0=21 1=1 5=1 6=10752
-Reshape                  Reshape_244              1 1 onnx::Reshape_354 onnx::Transpose_366 0=400 1=7 2=3
+Reshape                  Reshape_244              1 1 onnx::Reshape_354 onnx::Transpose_366 0=169 1=7 2=3
 Permute                  Transpose_245            1 1 onnx::Transpose_366 367 0=1

@@ -2,6 +2,19 @@
 
 open https://nihui.github.io/ncnn-webassembly-yolov5 and enjoy
 
+# quick build and deploy
+
+1. Allow execution for the shell script files
+
+```
+chmod +x ./setup.sh
+chmod +x ./build.sh
+```
+
+2. Run `./setup.sh`
+
+3. Run the web server and access http://localhost:8000 from the browser
+`python3 -m http.server --directory deploy`
 
 # build and deploy
 

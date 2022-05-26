@@ -115,7 +115,7 @@ static void generate_proposals(const ncnn::Mat& anchors, int stride, const ncnn:
 
     const int num_anchors = anchors.w / 2;
 
-    const int num_class = 80;
+    const int num_class = 2;
 
     for (int q = 0; q < num_anchors; q++)
     {
@@ -194,8 +194,8 @@ int YOLOv5::load()
 
     yolov5.opt.num_threads = ncnn::get_big_cpu_count();
 
-    yolov5.load_param("duckpuck-ncnn.param");
-    yolov5.load_model("duckpuck-ncnn.bin");
+    yolov5.load_param("best-220526-opt-fp16.param");
+    yolov5.load_model("best-220526-opt-fp16.bin");
 
     return 0;
 }
@@ -238,7 +238,7 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
 
     ncnn::Extractor ex = yolov5.create_extractor();
 
-    ex.input("in0", in_pad);
+    ex.input("images", in_pad);
 
     std::vector<Object> proposals;
 
@@ -247,7 +247,7 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     // stride 8
     {
         ncnn::Mat out;
-        ex.extract("out0", out);
+        ex.extract("output", out);
 
         ncnn::Mat anchors(6);
         anchors[0] = 10.f;
@@ -266,7 +266,7 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     // stride 16
     {
         ncnn::Mat out;
-        ex.extract("out1", out);
+        ex.extract("353", out);
 
         ncnn::Mat anchors(6);
         anchors[0] = 30.f;
@@ -285,7 +285,7 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     // stride 32
     {
         ncnn::Mat out;
-        ex.extract("out2", out);
+        ex.extract("367", out);
 
         ncnn::Mat anchors(6);
         anchors[0] = 116.f;
@@ -333,32 +333,24 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
         objects[i].rect.height = y1 - y0;
     }
 
-    // sort objects by area
-    struct
-    {
-        bool operator()(const Object& a, const Object& b) const
-        {
-            return a.rect.area() > b.rect.area();
-        }
-    } objects_area_greater;
-    std::sort(objects.begin(), objects.end(), objects_area_greater);
-
     return 0;
 }
 
 int YOLOv5::draw(cv::Mat& rgba, const std::vector<Object>& objects)
 {
-    static const char* class_names[] = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-        "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-        "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-        "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-        "hair drier", "toothbrush"
-    };
+    // static const char* class_names[] = {
+    //     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    //     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    //     "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    //     "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+    //     "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    //     "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    //     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+    //     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    //     "hair drier", "toothbrush"
+    // };
+    
+    static const char* class_names[] = { "dick", "dick-head" };
 
     static const unsigned char colors[19][3] = {
         { 54,  67, 244},

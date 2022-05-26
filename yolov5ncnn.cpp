@@ -82,7 +82,7 @@ static void on_image_render(cv::Mat& rgba)
     }
 
     std::vector<Object> objects;
-    g_yolov5->detect(rgba, objects);
+    g_yolov5->detect(rgba, objects, 0.5);
 
     g_yolov5->draw(rgba, objects);
 

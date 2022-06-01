@@ -15,5 +15,6 @@ cd ..
 find ./ -wholename './build/*.data' -exec cp -prv '{}' './deploy' ';'
 find ./ -wholename './build/*.wasm' -exec cp -prv '{}' './deploy' ';'
 find ./ -wholename './build/*.js' -exec cp -prv '{}' './deploy' ';'
+find ./ -wholename './assets/*.jpg' -exec cp -prv '{}' './deploy' ';'
 cp ./wasmFeatureDetect.js ./deploy/wasmFeatureDetect.js
 cp ./index.html ./deploy/index.html

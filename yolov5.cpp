@@ -13,10 +13,13 @@
 // specific language governing permissions and limitations under the License.
 
 #include "yolov5.h"
+#include <iostream>
 
 #include <float.h>
 #include <cpu.h>
 #include <simpleocv.h>
+
+using namespace std; 
 
 static inline float intersection_area(const Object& a, const Object& b)
 {
@@ -110,6 +113,7 @@ static inline float sigmoid(float x)
 
 static void generate_proposals(const ncnn::Mat& anchors, int stride, const ncnn::Mat& in_pad, const ncnn::Mat& feat_blob, float prob_threshold, std::vector<Object>& objects)
 {
+    printf("Generate purposals");
     const int num_grid_x = feat_blob.w;
     const int num_grid_y = feat_blob.h;
 
@@ -117,11 +121,13 @@ static void generate_proposals(const ncnn::Mat& anchors, int stride, const ncnn:
 
     const int num_class = 2;
 
+    printf("Starting to generate purposals for %d anchors", num_anchors);
     for (int q = 0; q < num_anchors; q++)
     {
         const float anchor_w = anchors[q * 2];
         const float anchor_h = anchors[q * 2 + 1];
 
+        printf("Anchor %f %f", anchor_w, anchor_h);
         for (int i = 0; i < num_grid_y; i++)
         {
             for (int j = 0; j < num_grid_x; j++)
@@ -191,115 +197,166 @@ int YOLOv5::load()
 
     ncnn::set_cpu_powersave(2);
     ncnn::set_omp_num_threads(ncnn::get_big_cpu_count());
-
     yolov5.opt.num_threads = ncnn::get_big_cpu_count();
-
-    yolov5.load_param("best-220526-opt-fp16.param");
-    yolov5.load_model("best-220526-opt-fp16.bin");
+    yolov5.load_param("best-220601-640-normal.param");
+    yolov5.load_model("best-220601-640-normal.bin");
 
     return 0;
 }
 
+void prettyPrint(const ncnn::Mat& m)
+{
+    for (int q=0; q<m.c; q++)
+    {
+        const float* ptr = m.channel(q);
+        for (int z=0; z<m.d; z++)
+        {
+            for (int y=0; y<m.h; y++)
+            {
+                for (int x=0; x<m.w; x++)
+                {
+                    printf("%f ", ptr[x]);
+                }
+                ptr += m.w;
+                printf("\n");
+            }
+            printf("\n");
+        }
+        printf("------------------------\n");
+    }
+}
+
+void transpose(ncnn::Mat& in, ncnn:: Mat& out) {
+    int w = in.w; // 1
+    int h = in.h; // 640
+    int d = in.d; // 640
+    int channels = in.c; // 3
+
+    out.create(w, channels, h, d, in.elemsize);
+
+    for (int q = 0; q < d; q++) {
+        float* outptr = out.channel(q);
+        for (int z = 0; z < h; z++) {
+            for (int i = 0; i < channels; i++) {
+                const float* ptr = in.channel(i).depth(q).row(z);
+                for (int j = 0; j < w; j++) {
+                    *outptr++ = ptr[j];
+                }
+            }
+        }
+    }
+}
+
 int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob_threshold, float nms_threshold)
 {
+    printf("detect\n");
     int width = rgba.cols;
     int height = rgba.rows;
 
-    const int target_size = 320;
-    const int max_stride = 64;
+    ncnn::Mat in = ncnn::Mat::from_pixels(rgba.data, ncnn::Mat::PIXEL_RGBA2RGB, width, height);
 
-    // pad to multiple of max_stride
-    int w = width;
-    int h = height;
-    float scale = 1.f;
-    if (w > h)
-    {
-        scale = (float)target_size / w;
-        w = target_size;
-        h = h * scale;
-    }
-    else
-    {
-        scale = (float)target_size / h;
-        h = target_size;
-        w = w * scale;
-    }
+    // prettyPrint(in);
 
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize(rgba.data, ncnn::Mat::PIXEL_RGBA2RGB, width, height, w, h);
+    printf("Color (%d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().c);
 
-    // pad to target_size rectangle
-    int wpad = (w + max_stride - 1) / max_stride * max_stride - w;
-    int hpad = (h + max_stride - 1) / max_stride * max_stride - h;
-    ncnn::Mat in_pad;
-    ncnn::copy_make_border(in, in_pad, hpad / 2, hpad - hpad / 2, wpad / 2, wpad - wpad / 2, ncnn::BORDER_CONSTANT, 114.f);
+    in = in.reshape(1, 640, 640, 3);
 
-    const float norm_vals[3] = {1 / 255.f, 1 / 255.f, 1 / 255.f};
-    in_pad.substract_mean_normalize(0, norm_vals);
+    // prettyPrint(in);
+
+    printf("Reshape (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
+
+    const float norm_vals[4] = {1 / 255.f, 1 / 255.f, 1 / 255.f, 1 / 255.f};
+    in.substract_mean_normalize(0, norm_vals);
+
+    printf("Normalized (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
+
+    ncnn::Mat transposed = ncnn::Mat();
+
+    transpose(in, transposed);
+
+    ncnn::Mat shape = transposed.shape();
+    printf("Transposed (%d, %d, %d, %d)\n", shape.w, shape.h, shape.d, shape.c);
 
     ncnn::Extractor ex = yolov5.create_extractor();
 
-    ex.input("images", in_pad);
+    ex.input("images", transposed);
+    printf("Input %d\n", transposed.dims);
+    
+    ncnn::Mat out;
+    ex.extract("output", out);
+
+    printf("Output %d\n", out.dims);
 
     std::vector<Object> proposals;
 
     // anchor setting from yolov5/models/yolov5s.yaml
 
-    // stride 8
-    {
-        ncnn::Mat out;
-        ex.extract("output", out);
+    // // stride 8
+    // {
 
-        ncnn::Mat anchors(6);
-        anchors[0] = 10.f;
-        anchors[1] = 13.f;
-        anchors[2] = 16.f;
-        anchors[3] = 30.f;
-        anchors[4] = 33.f;
-        anchors[5] = 23.f;
+    //     ncnn::Mat out;
+    //     ex.extract("output", out);
 
-        std::vector<Object> objects8;
-        generate_proposals(anchors, 8, in_pad, out, prob_threshold, objects8);
+    //     ncnn::Mat anchors(6);
+    //     anchors[0] = 10.f;
+    //     anchors[1] = 13.f;
+    //     anchors[2] = 16.f;
+    //     anchors[3] = 30.f;
+    //     anchors[4] = 33.f;
+    //     anchors[5] = 23.f;
 
-        proposals.insert(proposals.end(), objects8.begin(), objects8.end());
-    }
+    //     std::vector<Object> objects8;
+    //     generate_proposals(anchors, 8, in, out, prob_threshold, objects8);
 
-    // stride 16
-    {
-        ncnn::Mat out;
-        ex.extract("353", out);
+    //     memset(text1, 0, sizeof(text1));
+    //     sprintf(text1, "Stride 8 %lu", objects8.size());
+    //     print_log(text1);
 
-        ncnn::Mat anchors(6);
-        anchors[0] = 30.f;
-        anchors[1] = 61.f;
-        anchors[2] = 62.f;
-        anchors[3] = 45.f;
-        anchors[4] = 59.f;
-        anchors[5] = 119.f;
+    //     proposals.insert(proposals.end(), objects8.begin(), objects8.end());
+    // }
 
-        std::vector<Object> objects16;
-        generate_proposals(anchors, 16, in_pad, out, prob_threshold, objects16);
+    // // stride 16
+    // {
+    //     memset(text1, 0, sizeof(text1));
+    //     sprintf(text1, "Stride 16");
+    //     print_log(text1);
 
-        proposals.insert(proposals.end(), objects16.begin(), objects16.end());
-    }
+    //     ncnn::Mat out;
+    //     ex.extract("353", out);
 
-    // stride 32
-    {
-        ncnn::Mat out;
-        ex.extract("367", out);
+    //     ncnn::Mat anchors(6);
+    //     anchors[0] = 30.f;
+    //     anchors[1] = 61.f;
+    //     anchors[2] = 62.f;
+    //     anchors[3] = 45.f;
+    //     anchors[4] = 59.f;
+    //     anchors[5] = 119.f;
 
-        ncnn::Mat anchors(6);
-        anchors[0] = 116.f;
-        anchors[1] = 90.f;
-        anchors[2] = 156.f;
-        anchors[3] = 198.f;
-        anchors[4] = 373.f;
-        anchors[5] = 326.f;
+    //     std::vector<Object> objects16;
+    //     generate_proposals(anchors, 16, in, out, prob_threshold, objects16);
 
-        std::vector<Object> objects32;
-        generate_proposals(anchors, 32, in_pad, out, prob_threshold, objects32);
+    //     proposals.insert(proposals.end(), objects16.begin(), objects16.end());
+    // }
 
-        proposals.insert(proposals.end(), objects32.begin(), objects32.end());
-    }
+    // // stride 32
+    // {
+
+    //     ncnn::Mat out;
+    //     ex.extract("367", out);
+
+    //     ncnn::Mat anchors(6);
+    //     anchors[0] = 116.f;
+    //     anchors[1] = 90.f;
+    //     anchors[2] = 156.f;
+    //     anchors[3] = 198.f;
+    //     anchors[4] = 373.f;
+    //     anchors[5] = 326.f;
+
+    //     std::vector<Object> objects32;
+    //     generate_proposals(anchors, 32, in, out, prob_threshold, objects32);
+
+    //     proposals.insert(proposals.end(), objects32.begin(), objects32.end());
+    // }
 
     // sort all proposals by score from highest to lowest
     qsort_descent_inplace(proposals);
@@ -308,9 +365,19 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     std::vector<int> picked;
     nms_sorted_bboxes(proposals, picked, nms_threshold);
 
+    printf("NMSed\n");
+
     int count = picked.size();
 
+    printf("received %d objects\n", count);
+
     objects.resize(count);
+
+    // pad to target_size rectangle
+    int wpad = 0;
+    int hpad = 0;
+    int scale = 1;
+
     for (int i = 0; i < count; i++)
     {
         objects[i] = proposals[picked[i]];
@@ -338,40 +405,12 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
 
 int YOLOv5::draw(cv::Mat& rgba, const std::vector<Object>& objects)
 {
-    // static const char* class_names[] = {
-    //     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-    //     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-    //     "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-    //     "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-    //     "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-    //     "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-    //     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-    //     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-    //     "hair drier", "toothbrush"
-    // };
-    
     static const char* class_names[] = { "dick", "dick-head" };
 
-    static const unsigned char colors[19][3] = {
+    static const unsigned char colors[3][3] = {
         { 54,  67, 244},
         { 99,  30, 233},
         {176,  39, 156},
-        {183,  58, 103},
-        {181,  81,  63},
-        {243, 150,  33},
-        {244, 169,   3},
-        {212, 188,   0},
-        {136, 150,   0},
-        { 80, 175,  76},
-        { 74, 195, 139},
-        { 57, 220, 205},
-        { 59, 235, 255},
-        {  7, 193, 255},
-        {  0, 152, 255},
-        { 34,  87, 255},
-        { 72,  85, 121},
-        {158, 158, 158},
-        {139, 125,  96}
     };
 
     int color_index = 0;

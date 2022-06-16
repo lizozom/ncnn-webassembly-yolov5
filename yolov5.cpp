@@ -198,8 +198,16 @@ int YOLOv5::load()
     ncnn::set_cpu_powersave(2);
     ncnn::set_omp_num_threads(ncnn::get_big_cpu_count());
     yolov5.opt.num_threads = ncnn::get_big_cpu_count();
-    yolov5.load_param("best-220601-640-normal.param");
-    yolov5.load_model("best-220601-640-normal.bin");
+    // yolov5.load_param("best-220601-640-normal.param");
+    // yolov5.load_model("best-220601-640-normal.bin");
+    yolov5.load_param("best-220526-opt-fp16-640.param");
+    yolov5.load_model("best-220526-opt-fp16-640.bin");
+
+    // yolov5.load_param("best-dynamic.param");
+    // yolov5.load_model("best-dynamic.bin");
+
+    // yolov5.load_param("best-normal (1)-opt.param");
+    // yolov5.load_model("best-normal (1)-opt.bin");
 
     return 0;
 }
@@ -253,39 +261,39 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     int width = rgba.cols;
     int height = rgba.rows;
 
-    ncnn::Mat in = ncnn::Mat::from_pixels(rgba.data, ncnn::Mat::PIXEL_RGBA2RGB, width, height);
+    ncnn::Mat in = ncnn::Mat::from_pixels(rgba.data, ncnn::Mat::PIXEL_RGB, width, height);
 
     // prettyPrint(in);
 
-    printf("Color (%d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().c);
+    // printf("Color (%d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().c);
 
-    in = in.reshape(1, 640, 640, 3);
+    in = in.reshape(1, 3, 640, 640);
 
-    // prettyPrint(in);
+    // // prettyPrint(in);
 
-    printf("Reshape (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
+    // printf("Reshape (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
 
-    const float norm_vals[4] = {1 / 255.f, 1 / 255.f, 1 / 255.f, 1 / 255.f};
-    in.substract_mean_normalize(0, norm_vals);
+    // const float norm_vals[4] = {1 / 255.f, 1 / 255.f, 1 / 255.f, 1 / 255.f};
+    // in.substract_mean_normalize(0, norm_vals);
 
-    printf("Normalized (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
+    // printf("Normalized (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
 
-    ncnn::Mat transposed = ncnn::Mat();
+    // ncnn::Mat transposed = ncnn::Mat();
 
-    transpose(in, transposed);
+    // transpose(in, transposed);
 
-    ncnn::Mat shape = transposed.shape();
-    printf("Transposed (%d, %d, %d, %d)\n", shape.w, shape.h, shape.d, shape.c);
+    // ncnn::Mat shape = transposed.shape();
+    // printf("Transposed (%d, %d, %d, %d)\n", shape.w, shape.h, shape.d, shape.c);
 
     ncnn::Extractor ex = yolov5.create_extractor();
 
-    ex.input("images", transposed);
-    printf("Input %d\n", transposed.dims);
+    ex.input("images", in);
+    printf("Input %d\n", in.dims);
     
     ncnn::Mat out;
-    ex.extract("output", out);
+    int res = ex.extract("output", out);
 
-    printf("Output %d\n", out.dims);
+    printf("---------------------- Output %d (res %d)\n", out.dims, res);
 
     std::vector<Object> proposals;
 

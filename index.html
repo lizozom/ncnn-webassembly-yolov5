@@ -43,6 +43,65 @@
         var wasmModuleLoaded = false;
         var wasmModuleLoadedCallbacks = [];
 
+
+    async function getImageTensorFromPath(path, dims =  [1, 3, 224, 224]) {
+        // 1. load the image  
+        var image = await loadImageFromPath(path, dims[2], dims[3]);
+        // 2. convert to tensor
+        var imageTensor = imageDataToTensor(image, dims);
+        // 3. return the tensor
+        return imageTensor;
+    }
+
+    async function loadImageFromPath(path, width = 224, height = 224) {
+
+        var canvas = document.getElementById('canvas');
+        var ctx = canvas.getContext('2d');
+
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        return imageData.data;
+
+        // Use Jimp to load the image and resize it.
+        // var imageData = await Jimp.default.read(path).then((imageBuffer) => {
+        //     return imageBuffer.resize(width, height);
+        // });
+
+        // return imageData;
+    }
+
+    function imageDataToTensor(image, dims) {
+        // 1. Get buffer data from image and create R, G, and B arrays.
+        var imageBufferData = image;
+        const [redArray, greenArray, blueArray] = new Array(new Array(), new Array(), new Array());
+
+        // 2. Loop through the image buffer and extract the R, G, and B channels
+        for (let i = 0; i < imageBufferData.length; i += 4) {
+            redArray.push(imageBufferData[i]);
+            greenArray.push(imageBufferData[i + 1]);
+            blueArray.push(imageBufferData[i + 2]);
+            // skip data[i + 3] to filter out the alpha channel
+        }
+
+        // 3. Concatenate RGB to transpose [224, 224, 3] -> [3, 224, 224] to a number array
+        const transposedData = redArray.concat(greenArray).concat(blueArray);
+
+        // 4. convert to float32
+        let i, l = transposedData.length; // length, we need this for the loop
+        // create the Float32Array size 3 * 224 * 224 for these dimensions output
+        const float32Data = new Float32Array(dims[1] * dims[2] * dims[3]);
+        for (i = 0; i < l; i++) {
+            float32Data[i] = transposedData[i] / 255.0; // convert to float
+        }
+        // 5. create the tensor object from onnxruntime-web.
+        // const inputTensor = new Tensor("float32", float32Data, dims);
+        // return inputTensor;
+
+        return float32Data;
+    }
+
+
+
+
         Module.onRuntimeInitialized = function() {
             wasmModuleLoaded = true;
             for (var i = 0; i < wasmModuleLoadedCallbacks.length; i++) {
@@ -192,20 +251,22 @@
         }
 
 
-        function ncnn_yolov5() {
-            var canvas = document.getElementById('canvas');
-            var ctx = canvas.getContext('2d');
+        async function ncnn_yolov5() {
+            // var canvas = document.getElementById('canvas');
+            // var ctx = canvas.getContext('2d');
 
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var data = imageData.data;
+            // var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            // var data = imageData.data;
+
+            const data = await getImageTensorFromPath('http://localhost:3000/nondp.jpg', [1, 3, 640, 640])
 
             HEAPU8.set(data, dst);
 
             _yolov5_ncnn(dst, canvas.width, canvas.height);
 
             var result = HEAPU8.subarray(dst, dst + data.length);
-            imageData.data.set(result);
-            ctx.putImageData(imageData, 0, 0);
+            // imageData.data.set(result);
+            // ctx.putImageData(imageData, 0, 0);
         }
 
         //Request Animation Frame function

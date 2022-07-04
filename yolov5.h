@@ -32,7 +32,7 @@ public:
 
     int load();
 
-    int detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob_threshold = 0.4f, float nms_threshold = 0.5f);
+    int detect(float* data, std::vector<Object>& objects, float prob_threshold = 0.4f, float nms_threshold = 0.5f);
 
     int draw(cv::Mat& rgba, const std::vector<Object>& objects);
 

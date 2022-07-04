@@ -7,7 +7,9 @@ source emsdk/emsdk_env.sh
 source emsdk_env.sh
 
 cd ..
-wget https://github.com/Tencent/ncnn/releases/download/20220216/ncnn-20220216-webassembly.zip -nc
-unzip ncnn-20220216-webassembly.zip -n
+# wget https://github.com/Tencent/ncnn/releases/download/20220216/ncnn-20220216-webassembly.zip -nc
+# unzip ncnn-20220216-webassembly.zip -n
+wget https://github.com/Tencent/ncnn/releases/download/20220420/ncnn-20220420-webassembly.zip -nc
+unzip ncnn-20220420-webassembly.zip -d ncnn-20220420-webassembly -q
 
 ./build.sh

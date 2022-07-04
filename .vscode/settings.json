@@ -94,6 +94,7 @@
         "*.tcc": "cpp",
         "memory_resource": "cpp",
         "netfwd": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "filesystem": "cpp"
     }
 }

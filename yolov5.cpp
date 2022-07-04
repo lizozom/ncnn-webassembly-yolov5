@@ -18,6 +18,7 @@
 #include <float.h>
 #include <cpu.h>
 #include <simpleocv.h>
+#include <cmath>
 
 using namespace std; 
 
@@ -191,6 +192,11 @@ YOLOv5::YOLOv5()
 {
 }
 
+static void printVector(std::vector<const char*> path) {
+    for (int i=0; i<path.size(); ++i)
+        std::cout << path[i];
+}
+
 int YOLOv5::load()
 {
     yolov5.clear();
@@ -200,100 +206,72 @@ int YOLOv5::load()
     yolov5.opt.num_threads = ncnn::get_big_cpu_count();
     // yolov5.load_param("best-220601-640-normal.param");
     // yolov5.load_model("best-220601-640-normal.bin");
-    yolov5.load_param("best-220526-opt-fp16-640.param");
-    yolov5.load_model("best-220526-opt-fp16-640.bin");
+    yolov5.load_param("best-220601-640-normal-opt.param");
+    yolov5.load_model("best-220601-640-normal-opt.bin");
 
-    // yolov5.load_param("best-dynamic.param");
-    // yolov5.load_model("best-dynamic.bin");
+    std::vector<const char *> input_names = yolov5.input_names();
+    std::vector<const char *> output_names = yolov5.output_names();
 
-    // yolov5.load_param("best-normal (1)-opt.param");
-    // yolov5.load_model("best-normal (1)-opt.bin");
+    printf("input ");
+    printVector(input_names);
+    printf("\n");
+    printf("output ");
+    printVector(output_names);
+    printf("\n");
 
     return 0;
 }
 
-void prettyPrint(const ncnn::Mat& m)
+void avgMatrix(const ncnn::Mat& m)
 {
+    printf("averaging out (%d, %d, %d, %d)\n", m.w, m.h, m.d, m.c);
+    float total = 0;
+    int count = 0;
     for (int q=0; q<m.c; q++)
     {
         const float* ptr = m.channel(q);
-        for (int z=0; z<m.d; z++)
+
+        for (int z=0; z< m.d; z++)
         {
-            for (int y=0; y<m.h; y++)
+            for (int y=0; y< m.h; y++)
             {
-                for (int x=0; x<m.w; x++)
+                for (int x=0; x<m.w ; x++)
                 {
-                    printf("%f ", ptr[x]);
+                    if (isnan(ptr[x])) {
+                        printf("weird at (%d, %d, %d, %d)\n", x, y, z, q);
+                    } else {
+                        count++;
+                        total += ptr[x];
+
+                    }
                 }
                 ptr += m.w;
-                printf("\n");
-            }
-            printf("\n");
-        }
-        printf("------------------------\n");
-    }
-}
-
-void transpose(ncnn::Mat& in, ncnn:: Mat& out) {
-    int w = in.w; // 1
-    int h = in.h; // 640
-    int d = in.d; // 640
-    int channels = in.c; // 3
-
-    out.create(w, channels, h, d, in.elemsize);
-
-    for (int q = 0; q < d; q++) {
-        float* outptr = out.channel(q);
-        for (int z = 0; z < h; z++) {
-            for (int i = 0; i < channels; i++) {
-                const float* ptr = in.channel(i).depth(q).row(z);
-                for (int j = 0; j < w; j++) {
-                    *outptr++ = ptr[j];
-                }
             }
         }
     }
+    printf("Avg of normalized matrix is %f, %d, %f\n", total, count, total/count);
 }
 
-int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob_threshold, float nms_threshold)
+int YOLOv5::detect(float* data, std::vector<Object>& objects, float prob_threshold, float nms_threshold)
 {
     printf("detect\n");
-    int width = rgba.cols;
-    int height = rgba.rows;
+    int width = 640;
+    int height = 640;
 
-    ncnn::Mat in = ncnn::Mat::from_pixels(rgba.data, ncnn::Mat::PIXEL_RGB, width, height);
-
-    // prettyPrint(in);
-
-    // printf("Color (%d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().c);
-
-    in = in.reshape(1, 3, 640, 640);
-
-    // // prettyPrint(in);
-
-    // printf("Reshape (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
-
-    // const float norm_vals[4] = {1 / 255.f, 1 / 255.f, 1 / 255.f, 1 / 255.f};
-    // in.substract_mean_normalize(0, norm_vals);
-
-    // printf("Normalized (%d, %d, %d, %d)\n", in.shape().w, in.shape().h, in.shape().d, in.shape().c);
-
-    // ncnn::Mat transposed = ncnn::Mat();
-
-    // transpose(in, transposed);
-
-    // ncnn::Mat shape = transposed.shape();
-    // printf("Transposed (%d, %d, %d, %d)\n", shape.w, shape.h, shape.d, shape.c);
-
+    ncnn::Mat in = ncnn::Mat(1, 3, width, height, (void*)data, 4);
     ncnn::Extractor ex = yolov5.create_extractor();
 
     ex.input("images", in);
-    printf("Input %d\n", in.dims);
-    
+    printf("Input %d dims, empty? %s\n", in.dims, in.empty() ? "yes" : "no");
+   
     ncnn::Mat out;
     int res = ex.extract("output", out);
+    if (res != 0) {
+        printf("error %d\n", res);
+        return res;
+    } 
 
-    printf("---------------------- Output %d (res %d)\n", out.dims, res);
+    printf("---------------------- Output %d, empty? %s\n", out.dims, out.empty() ? "yes" : "no");
 
     std::vector<Object> proposals;
 
@@ -367,46 +345,46 @@ int YOLOv5::detect(const cv::Mat& rgba, std::vector<Object>& objects, float prob
     // }
 
     // sort all proposals by score from highest to lowest
-    qsort_descent_inplace(proposals);
+    // qsort_descent_inplace(proposals);
 
-    // apply nms with nms_threshold
-    std::vector<int> picked;
-    nms_sorted_bboxes(proposals, picked, nms_threshold);
+    // // apply nms with nms_threshold
+    // std::vector<int> picked;
+    // nms_sorted_bboxes(proposals, picked, nms_threshold);
 
-    printf("NMSed\n");
+    // printf("NMSed\n");
 
-    int count = picked.size();
+    // int count = picked.size();
 
-    printf("received %d objects\n", count);
+    // printf("received %d objects\n", count);
 
-    objects.resize(count);
+    // objects.resize(count);
 
-    // pad to target_size rectangle
-    int wpad = 0;
-    int hpad = 0;
-    int scale = 1;
+    // // pad to target_size rectangle
+    // int wpad = 0;
+    // int hpad = 0;
+    // int scale = 1;
 
-    for (int i = 0; i < count; i++)
-    {
-        objects[i] = proposals[picked[i]];
+    // for (int i = 0; i < count; i++)
+    // {
+    //     objects[i] = proposals[picked[i]];
 
-        // adjust offset to original unpadded
-        float x0 = (objects[i].rect.x - (wpad / 2)) / scale;
-        float y0 = (objects[i].rect.y - (hpad / 2)) / scale;
-        float x1 = (objects[i].rect.x + objects[i].rect.width - (wpad / 2)) / scale;
-        float y1 = (objects[i].rect.y + objects[i].rect.height - (hpad / 2)) / scale;
+    //     // adjust offset to original unpadded
+    //     float x0 = (objects[i].rect.x - (wpad / 2)) / scale;
+    //     float y0 = (objects[i].rect.y - (hpad / 2)) / scale;
+    //     float x1 = (objects[i].rect.x + objects[i].rect.width - (wpad / 2)) / scale;
+    //     float y1 = (objects[i].rect.y + objects[i].rect.height - (hpad / 2)) / scale;
 
-        // clip
-        x0 = std::max(std::min(x0, (float)(width - 1)), 0.f);
-        y0 = std::max(std::min(y0, (float)(height - 1)), 0.f);
-        x1 = std::max(std::min(x1, (float)(width - 1)), 0.f);
-        y1 = std::max(std::min(y1, (float)(height - 1)), 0.f);
+    //     // clip
+    //     x0 = std::max(std::min(x0, (float)(width - 1)), 0.f);
+    //     y0 = std::max(std::min(y0, (float)(height - 1)), 0.f);
+    //     x1 = std::max(std::min(x1, (float)(width - 1)), 0.f);
+    //     y1 = std::max(std::min(y1, (float)(height - 1)), 0.f);
 
-        objects[i].rect.x = x0;
-        objects[i].rect.y = y0;
-        objects[i].rect.width = x1 - x0;
-        objects[i].rect.height = y1 - y0;
-    }
+    //     objects[i].rect.x = x0;
+    //     objects[i].rect.y = y0;
+    //     objects[i].rect.width = x1 - x0;
+    //     objects[i].rect.height = y1 - y0;
+    // }
 
     return 0;
 }

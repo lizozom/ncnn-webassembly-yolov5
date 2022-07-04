@@ -72,7 +72,7 @@ static int draw_fps(cv::Mat& rgba)
 
 static YOLOv5* g_yolov5 = 0;
 
-static void on_image_render(cv::Mat& rgba)
+static void on_image_render(float* datain)
 {
     if (!g_yolov5)
     {
@@ -82,16 +82,16 @@ static void on_image_render(cv::Mat& rgba)
     }
 
     std::vector<Object> objects;
-    g_yolov5->detect(rgba, objects, 0.5, 0.5);
+    g_yolov5->detect(datain, objects, 0.5, 0.5);
 
-    g_yolov5->draw(rgba, objects);
+    // g_yolov5->draw(rgba, objects);
 
-    draw_fps(rgba);
+    // draw_fps(rgba);
 }
 
 #ifdef __EMSCRIPTEN_PTHREADS__
 
-static const unsigned char* rgba_data = 0;
+static float* data = 0;
 static int w = 0;
 static int h = 0;
 
@@ -106,16 +106,15 @@ static void worker()
     while (1)
     {
         lock.lock();
-        while (rgba_data == 0)
+        while (data == 0)
         {
             condition.wait(lock);
         }
 
-        cv::Mat rgba(h, w, CV_8UC4, (void*)rgba_data);
+        on_image_render(data);
 
-        on_image_render(rgba);
-
-        rgba_data = 0;
+        printf("data cleared");
+        data = 0;
 
         lock.unlock();
 
@@ -130,15 +129,16 @@ static std::thread t(worker);
 
 extern "C" {
 
-void yolov5_ncnn(unsigned char* _rgba_data, int _w, int _h)
+void yolov5_ncnn(float* _data, int _w, int _h)
 {
+    printf("yolov5_ncnn 1\n");
     lock.lock();
-    while (rgba_data != 0)
+    while (data != 0)
     {
         condition.wait(lock);
     }
 
-    rgba_data = _rgba_data;
+    data = _data;
     w = _w;
     h = _h;
 
@@ -148,7 +148,7 @@ void yolov5_ncnn(unsigned char* _rgba_data, int _w, int _h)
 
     // wait for finished
     finish_lock.lock();
-    while (rgba_data != 0)
+    while (data != 0)
     {
         finish_condition.wait(finish_lock);
     }
@@ -161,11 +161,10 @@ void yolov5_ncnn(unsigned char* _rgba_data, int _w, int _h)
 
 extern "C" {
 
-void yolov5_ncnn(unsigned char* rgba_data, int w, int h)
-{
-    cv::Mat rgba(h, w, CV_8UC4, (void*)rgba_data);
-
-    on_image_render(rgba);
+void yolov5_ncnn(float* _data, int w, int h)
+{   
+    printf("yolov5_ncnn 2\n");
+    on_image_render(_data);
 }
 
 }

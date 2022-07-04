@@ -43,7 +43,21 @@
             var canvas = document.getElementById('canvas');
             var ctx = canvas.getContext('2d');
             var img = document.getElementsByClassName('dp-img')[0];
-            ctx.drawImage(img, 0, 0);
+
+            const imgW = img.width;
+            const imgH = img.height;
+            let scaledW;
+            let scaledH;
+
+            if (imgW > imgH) {
+                scaledW = canvas.width;
+                scaledH = imgH * canvas.width / imgW;
+            } else {
+                scaledH = canvas.height;
+                scaledW = imgW * canvas.height / imgH;
+            }
+
+            ctx.drawImage(img, 0, 0, scaledW, scaledH);
 
             var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             return imageData.data;
@@ -143,16 +157,12 @@
                 }
 
                 dst = _malloc(3 * 640 * 640 * 4);
-                ncnn_yolov5();
+                const data = await getImageTensor()
+                HEAPF32.set(data, dst >> 2);
+                _yolov5_ncnn(dst, canvas.width, canvas.height);
+                var result = HEAPU8.subarray(dst, dst + data.length);
             }
         });
-
-        async function ncnn_yolov5() {
-            const data = await getImageTensor()
-            HEAPF32.set(data, dst >> 2);
-            _yolov5_ncnn(dst, canvas.width, canvas.height);
-            var result = HEAPU8.subarray(dst, dst + data.length);
-        }
 
     </script>
 

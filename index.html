@@ -150,7 +150,7 @@
                 wasmModuleLoadedCallbacks.push(mallocAndCallSFilter);
             }
 
-            function mallocAndCallSFilter() {
+            async function mallocAndCallSFilter() {
                 if (dst != null) {
                     _free(dst);
                     dst = null;
